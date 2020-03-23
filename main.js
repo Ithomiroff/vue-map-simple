@@ -1,16 +1,7 @@
 Vue.component('google-map', {
-  data: function () {
-    return {
-      map: null
-    }
-  },
+  props: [
+  ],
   mounted: function () {
-    const el = document.querySelector('#mappy');
-    const options = {
-      zoom: 14,
-      center: new google.maps.LatLng(59.93, 30.32)
-    };
-    this.map = new google.maps.Map(el, options);
   },
   template: `
     <div id="mappy"></div>
@@ -47,6 +38,7 @@ Vue.component('search', {
                    v-on:focus="onSearch($event.target.value, place.id)"
                    v-on:blur="onHideVars(place.id)"
                    placeholder="введите название города"
+                   autofocus
                    >
                   
                    <button class="btn btn_remove" v-on:click="onRemove(place.id)">-</button>
@@ -64,15 +56,15 @@ Vue.component('search', {
     </div>
   `
 });
-// v-on:blur="onHideVars(place.id)"
-
 
 const defaultPlaceItem = (id) => ({
   id,
   value: '',
   placeId: null,
   list: [],
-  ref: null
+  ref: null,
+  position: null,
+  markers: []
 });
 
 const App = {
@@ -87,13 +79,26 @@ const App = {
   mounted: function () {
     const el = document.querySelector('#mappy');
     const options = {
-      zoom: 14,
+      zoom: 5,
       center: new google.maps.LatLng(59.93, 30.32)
     };
     this.map = new google.maps.Map(el, options);
     REGISTER_CARD(this.map);
   },
   methods: {
+    addMarker: function (position, placeId) {
+      const marker = new google.maps.Marker({
+        map: map,
+        position
+      });
+      map.setCenter(position);
+      return marker;
+    },
+    removeMarker: function (place) {
+      if (place.marker) {
+        place.marker.setMap(null);
+      }
+    },
     addEmptyPlace: function () {
       this.selectedPlaces.push(defaultPlaceItem(+new Date()));
     },
@@ -110,25 +115,45 @@ const App = {
         placeInput.ref.value = place.description;
         placeInput.value = place.description;
       }
+      this.removeMarker(placeInput);
+      GET_COORDINATES(place.place_id).then((position) => {
+        placeInput.position = position;
+        placeInput.marker = this.addMarker(position, place.place_id);
+      })
     },
     removePlace: function (id) {
+      const place = this.selectedPlaces.find((item) => item.id === id);
+      this.removeMarker(place);
+
       if (this.selectedPlaces.length < 2) {
+        if (place.ref) {
+          place.ref.value = '';
+        }
         return;
       }
+
       this.selectedPlaces = this.selectedPlaces.filter((item) => item.id !== id);
     },
     findPlaces: function (value, id, ref) {
       const placeInput = this.selectedPlaces.find(item => item.id === id);
       placeInput.ref = ref;
+      if (!value) {
+        return this.removeMarker(placeInput);
+      }
       if (value && value.length < 3 || !value) {
         return placeInput.list = [];
       }
       FIND_PLACE(value)
         .then((places) => {
-          console.warn(places);
           placeInput.list = places;
         })
         .catch(r => console.warn(r))
+    },
+    send: function () {
+      const data = this.selectedPlaces.map((place) => place.placeId);
+      console.warn(data);
+
+      //Метод отправления placeId
     }
   },
   template: `
@@ -141,7 +166,8 @@ const App = {
             :selectPlace="selectPlace"
             :onRemove="removePlace"
             ></search>
-        <google-map></google-map>
+        <google-map
+        ></google-map>
     </div>
 `,
 };
